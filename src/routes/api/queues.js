@@ -208,3 +208,5 @@ router.delete("/queue/:id",Authmiddleware ,Authroles("staff","admin"),async(req,
     }
 
 })
+
+export default router ;

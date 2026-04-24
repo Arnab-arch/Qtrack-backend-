@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config() ;   // .config()reads all the files .env and loads all the varialblew  in process.env
 
 
-export const Authmiddleware = async(res,res) => {
+export const Authmiddleware = async(req,res) => {
     try{
         const authheader = req.headers.autherization;
 
