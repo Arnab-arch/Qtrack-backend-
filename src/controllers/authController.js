@@ -90,7 +90,7 @@ export const login = async (req, res) => {
 
     ]);
 
-    if (!current) {
+    if (current.rows.length===0) {
       return res.status(403).json({
         success: false,
         message: "user does not exist",
@@ -122,7 +122,7 @@ export const login = async (req, res) => {
       token: token,
       user: {
         user_id: user.user_id,
-        full_name: user.full_name,
+        name: user.name,
         email: user.email,
         phone: user.phone,
         role: user.role,

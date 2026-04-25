@@ -5,7 +5,7 @@ dotenv.config() ;   // .config()reads all the files .env and loads all the varia
 
 export const Authmiddleware = async(req,res,next) => {
     try{
-        const authheader = req.headers.autherization;
+        const authheader = req.headers.authorization;
 
         if(!authheader || !authheader.startsWith("Bearer ")){
            return res.status(401).json({
