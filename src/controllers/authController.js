@@ -15,7 +15,7 @@ import bcrypt, { hash } from "bcryptjs";
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role ,phone} = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -53,9 +53,9 @@ export const register = async (req, res) => {
     const hash = bcrypt.hashSync(password, salt);
 
     const result = await pool.query(
-      `INSERT * INTO users (full_name ,email,password,phone,role,is_active)
+      `INSERT  INTO users (name ,email,password_hash,phone,role,is_active)
     VALUES($1,$2,$3,$4,$5,$6)
-    RETURNING user_id ,full_name,email,phone,role,created_at `,
+    RETURNING user_id ,name,email,phone,role,created_at `,
       [name, email.toLowerCase(), hash, phone, userRole, true],
     );
 
@@ -63,13 +63,13 @@ export const register = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "User registered successfully",
-      user: newUser,
+      user: user,
     });
   } catch (err) {
     console.error("registration error", err);
     return res.status(500).json({
       success: false,
-      error: "Internal server error during registration",
+      error: err.message ,
     });
   }
 };
@@ -78,15 +78,16 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const [email, password] = req.body;
+    const {email, password} = req.body;
     if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: "required feilds missing ",
       });
     }
-    const current = await pool.query(`SELECT * FROM users WHERE email=${1}`, [
+    const current = await pool.query(`SELECT * FROM users WHERE email=$1`, [
       email.toLowerCase(),
+
     ]);
 
     if (!current) {
@@ -96,7 +97,9 @@ export const login = async (req, res) => {
       });
     }
 
-    const passwordmatch = await bcrypt.compare(password, user.password);
+    const user = current.rows[0];
+
+    const passwordmatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordmatch) {
       return res.status(403).json({
         success: false,
@@ -129,7 +132,7 @@ export const login = async (req, res) => {
     console.error("login error", err);
     return res.status(500).json({
       success: false,
-      error: "Internal server error during login",
+      error: err.message ,
     });
   }
 };

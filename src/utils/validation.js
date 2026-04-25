@@ -7,14 +7,9 @@ export const isValidemail=(email)=>{
     return false ;
   }
 }
-
-export const isValidpassword =(password)=>{
-  if (password.length < 6){
-    return {valid:false , message:"should contain more than 6 character"} ;
-    
-  }else{
-    return {valid:true} ;
-  }}
+export const isValidpassword = (password) => {
+  return password.length >= 6;
+};
 
 export const inputsanitize =(input) =>{
   if (typeof input !== "string") return input 
