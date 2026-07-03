@@ -34,6 +34,7 @@ export const updateTokenStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    
 
     let result;
 
@@ -55,6 +56,8 @@ export const updateTokenStatus = async (req, res) => {
         [status, id]
       );
     }
+
+   
 
     return res.status(200).json({
       success: true,

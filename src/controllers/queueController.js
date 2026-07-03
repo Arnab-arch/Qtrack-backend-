@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { getAvgServiceSeconds } from "../helpers/timeEstimation.js";
 
 export const createQueue = async (req, res) => {
   try {
@@ -17,7 +18,7 @@ export const createQueue = async (req, res) => {
       `INSERT INTO queues (service_id, queue_date, status)
        VALUES ($1,$2,$3)
        RETURNING *`,
-      [service_id, today, "active"]
+      [service_id, today, "open"]
     );
 
     return res.status(201).json({
@@ -40,9 +41,97 @@ export const createQueue = async (req, res) => {
   }
 };
 
+export const getQueuesBrowse = async (req, res) => {
+  try {
+    const { city, state, search, date } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const queueDate = date || new Date().toISOString().split("T")[0];
+
+    const params = [queueDate];
+    let where = `WHERE q.queue_date = $1`;
+
+    if (city) {
+      params.push(city);
+      where += ` AND LOWER(l.city) = LOWER($${params.length})`;
+    }
+    if (state) {
+      params.push(state);
+      where += ` AND LOWER(l.state) = LOWER($${params.length})`;
+    }
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`);
+      where += ` AND (LOWER(s.service_name) LIKE $${params.length} OR LOWER(l.name) LIKE $${params.length} OR LOWER(l.city) LIKE $${params.length})`;
+    }
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM queues q
+       JOIN services s ON q.service_id = s.service_id
+       JOIN locations l ON s.location_id = l.location_id
+       ${where}`,
+      params
+    );
+
+    const query = `
+      SELECT
+        q.queue_id, q.service_id, q.status, q.queue_date,
+        s.service_name, s.avg_service_time,
+        l.location_id, l.name AS location_name, l.city, l.state,
+        COUNT(t.token_id) FILTER (WHERE t.status IN ('waiting','serving')) AS waiting
+      FROM queues q
+      JOIN services s ON q.service_id = s.service_id
+      JOIN locations l ON s.location_id = l.location_id
+      LEFT JOIN tokens t ON q.queue_id = t.queue_id
+      ${where}
+      GROUP BY q.queue_id, s.service_id, l.location_id
+      ORDER BY l.name, s.service_name
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+
+    const result = await pool.query(query, [...params, limit, offset]);
+
+    // Estimated wait per queue: waiting count x avg service time for that
+    // service (uses real history once enough completed tokens exist).
+    const data = await Promise.all(
+      result.rows.map(async (row) => {
+        const avgSeconds = await getAvgServiceSeconds(row.service_id);
+        const waiting = Number(row.waiting);
+        return {
+          queue_id: row.queue_id,
+          service_id: row.service_id,
+          service_name: row.service_name,
+          location_id: row.location_id,
+          location_name: row.location_name,
+          city: row.city,
+          state: row.state,
+          status: row.status, // 'open' | 'paused' | 'closed'
+          queue_date: row.queue_date,
+          waiting,
+          estimatedWaitMinutes: Math.round((waiting * avgSeconds) / 60),
+        };
+      })
+    );
+
+    const total = Number(countResult.rows[0].count);
+
+    return res.status(200).json({
+      success: true,
+      count: data.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      data,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 export const getQueues = async (req, res) => {
   try {
     const { date } = req.query;
+
 
     let result;
 
@@ -118,7 +207,7 @@ export const updateQueueStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const allowed = ["active", "paused", "closed"];
+    const allowed = ["open", "paused", "closed"];
 
     if (!allowed.includes(status)) {
       return res.status(400).json({
@@ -134,6 +223,13 @@ export const updateQueueStatus = async (req, res) => {
        RETURNING *`,
       [status, id]
     );
+
+    const io = req.app.get("io");
+    io.to(`queue_${id}`).emit("queue_updated", {
+      queueId: id,
+      event: "queue_status_changed",
+      queue: result.rows[0],
+    });
 
     return res.status(200).json({
       success: true,
@@ -174,12 +270,12 @@ export const joinQueue = async (req, res) => {
   try {
     const { id } = req.params;
     const { user_id } = req.user;
-    const { email, phone } = req.body;
+    const { email, phone, user_lat, user_lon, user_address } = req.body;
 
     const queueCheck = await pool.query(
       `SELECT * FROM queues
        WHERE queue_id = $1
-       AND status = 'active'`,
+       AND status = 'open'`,
       [id]
     );
 
@@ -214,11 +310,18 @@ export const joinQueue = async (req, res) => {
 
     const token = await pool.query(
       `INSERT INTO tokens
-       (queue_id, user_id, token_number, email, phone, status)
-       VALUES ($1,$2,$3,$4,$5,$6)
+       (queue_id, user_id, token_number, email, phone, status, user_lat, user_lon, user_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING *`,
-      [id, user_id, nextToken, email, phone, "waiting"]
+      [id, user_id, nextToken, email, phone, "waiting", user_lat || null, user_lon || null, user_address || null]
     );
+
+    const io = req.app.get("io");
+    io.to(`queue_${id}`).emit("queue_updated", {
+      queueId: id,
+      event: "token_joined",
+      token: token.rows[0],
+    });
 
     return res.status(201).json({
       success: true,
@@ -232,9 +335,37 @@ export const joinQueue = async (req, res) => {
   }
 };
 
+export const getQueuesByService = async(req,res)=>{
+  try{
+    const {service_id}= req.params ;
+
+    const result = await pool.query(
+  `SELECT * FROM queues WHERE service_id = $1 AND status = 'open' ORDER BY queue_date DESC`,
+  [service_id]
+);
+    return res.status(200).json({
+      success: true,
+      data: result.rows,
+    });
+  }catch(err){
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+}
+
 export const callNextToken = async (req, res) => {
   try {
     const { id } = req.params;
+
+    const servingToken = await pool.query(`SELECT * FROM tokens WHERE queue_id=$1 AND status='serving'`,[id])
+    if (servingToken.rows.length > 0){
+      return res.status(400).json({
+        success:false,
+        message:"current token must be completed first"
+      });
+    }
 
     const nextToken = await pool.query(
       `SELECT *
@@ -263,6 +394,13 @@ export const callNextToken = async (req, res) => {
        RETURNING *`,
       ["serving", tokenId]
     );
+
+    const io = req.app.get("io");
+    io.to(`queue_${id}`).emit("queue_updated", {
+      queueId: id,
+      event: "token_called",
+      token: updated.rows[0],
+    });
 
     return res.status(200).json({
       success: true,
@@ -303,3 +441,41 @@ export const getQueueStats = async (req, res) => {
     });
   }
 };
+
+export const Tokenserved = async(req,res) =>{
+  try{
+    const {id} = req.params;
+
+    const result = await pool.query(`UPDATE tokens
+SET
+  status = 'completed',
+  served_at = NOW()
+WHERE queue_id = $1
+AND status = 'serving'
+RETURNING *`,[id]);
+
+if (result.rows.length === 0){
+  return res.status(404).json({
+    success: false,
+    message: "No serving token found"
+  });
+}
+
+    const io = req.app.get("io");
+    io.to(`queue_${id}`).emit("queue_updated", {
+      queueId: id,
+      event: "token_completed",
+      token: result.rows[0],
+    });
+
+    return res.status(200).json({
+      success:true,
+      message:"token served"
+    })
+  }catch(err){
+    return res.status(500).json({
+      success:false,
+      message:err.message,
+    });
+  }
+}

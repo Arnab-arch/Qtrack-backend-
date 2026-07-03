@@ -11,11 +11,10 @@ import {
 import { ROLES, isValidRole } from "../config/roles.js";
 import bcrypt, { hash } from "bcryptjs";
 
-
-
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role ,phone} = req.body;
+    console.log("REQ BODY:", req.body);
+    const { name, email, password, role, phone } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -69,7 +68,7 @@ export const register = async (req, res) => {
     console.error("registration error", err);
     return res.status(500).json({
       success: false,
-      error: err.message ,
+      error: err.message,
     });
   }
 };
@@ -78,7 +77,7 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const {email, password} = req.body;
+    const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -87,10 +86,9 @@ export const login = async (req, res) => {
     }
     const current = await pool.query(`SELECT * FROM users WHERE email=$1`, [
       email.toLowerCase(),
-
     ]);
 
-    if (current.rows.length===0) {
+    if (current.rows.length === 0) {
       return res.status(403).json({
         success: false,
         message: "user does not exist",
@@ -132,7 +130,7 @@ export const login = async (req, res) => {
     console.error("login error", err);
     return res.status(500).json({
       success: false,
-      error: err.message ,
+      error: err.message,
     });
   }
 };
@@ -140,7 +138,7 @@ export const login = async (req, res) => {
 export const getCurrentUser = async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT user_id, full_name, email, phone, role, created_at FROM users WHERE user_id = $1 AND is_active = true",
+      "SELECT user_id,name, email, phone, role, created_at FROM users WHERE user_id = $1 AND is_active = true",
       [req.user.user_id],
     );
 

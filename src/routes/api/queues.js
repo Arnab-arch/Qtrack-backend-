@@ -2,6 +2,7 @@ import express from "express";
 import {
   createQueue,
   getQueues,
+  getQueuesBrowse,
   getQueueById,
   updateQueueStatus,
   deleteQueue,
@@ -14,12 +15,20 @@ import {
   Authmiddleware,
   Authroles,
 } from "../../middleware/authMiddleware.js";
+import { getQueuesByService } from "../../controllers/queueController.js";
+import { getQueueEta } from "../../helpers/timeEstimation.js";
 
 const router = express.Router();
 
 router.post("/", Authmiddleware, createQueue);
 router.get("/", getQueues);
+router.get("/browse", getQueuesBrowse);
+router.get(
+  "/service/:service_id",
+  getQueuesByService
+);
 
+router.get("/:id/eta", getQueueEta);
 router.get("/:id/stats", Authmiddleware, getQueueStats);
 router.get("/:id", getQueueById);
 

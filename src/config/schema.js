@@ -1,3 +1,5 @@
+import pool from "./db.js";
+
 export const initDb = async () => {
   try {
     await pool.query(`
@@ -9,7 +11,10 @@ export const initDb = async () => {
         phone VARCHAR(15),
         role VARCHAR(20) DEFAULT 'visitor',
         is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT NOW(),
+        latitude NUMERIC,
+        longitude NUMERIC,
+        updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
 
@@ -23,7 +28,9 @@ export const initDb = async () => {
         phone VARCHAR(15) NOT NULL,
         email VARCHAR(150) NOT NULL,
         created_at TIMESTAMP DEFAULT NOW(),
-        is_active BOOLEAN DEFAULT TRUE
+        is_active BOOLEAN DEFAULT TRUE,
+        latitude NUMERIC,
+        longitude NUMERIC
       );
     `);
 
@@ -44,7 +51,7 @@ export const initDb = async () => {
         queue_id SERIAL PRIMARY KEY,
         service_id INT REFERENCES services(service_id),
         queue_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'active',
+        status VARCHAR(20) DEFAULT 'open',
         created_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(service_id, queue_date)
       );
@@ -61,7 +68,10 @@ export const initDb = async () => {
         status VARCHAR(20) DEFAULT 'waiting',
         called_at TIMESTAMP,
         served_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT NOW(),
+        user_lat NUMERIC,
+        user_lon NUMERIC,
+        user_address TEXT
       );
     `);
 

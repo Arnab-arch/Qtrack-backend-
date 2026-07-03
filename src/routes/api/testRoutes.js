@@ -1,7 +1,8 @@
 import express from "express";
-import authMiddleware, {
-  authorizeRoles,
-  authorizeOwner,
+import {
+  Authmiddleware as authMiddleware,
+  Authroles as authorizeRoles,
+  autherizeOwner as authorizeOwner,
   authorizeRoleOrOwner,
 } from "../../middleware/authMiddleware.js";
 
