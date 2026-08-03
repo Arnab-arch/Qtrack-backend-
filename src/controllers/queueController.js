@@ -1,5 +1,7 @@
+import { Socket } from "dgram";
 import pool from "../config/db.js";
 import { getAvgServiceSeconds } from "../helpers/timeEstimation.js";
+import {estimateQueueWait} from "../helpers/timeEstimation.js"
 
 export const createQueue = async (req, res) => {
   try {
@@ -224,13 +226,12 @@ export const updateQueueStatus = async (req, res) => {
       [status, id]
     );
 
-    const io = req.app.get("io");
-    io.to(`queue_${id}`).emit("queue_updated", {
-      queueId: id,
-      event: "queue_status_changed",
-      queue: result.rows[0],
-    });
-
+     if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Queue not found",
+      });
+    }
     return res.status(200).json({
       success: true,
       data: result.rows[0],
@@ -315,13 +316,11 @@ export const joinQueue = async (req, res) => {
        RETURNING *`,
       [id, user_id, nextToken, email, phone, "waiting", user_lat || null, user_lon || null, user_address || null]
     );
-
-    const io = req.app.get("io");
-    io.to(`queue_${id}`).emit("queue_updated", {
-      queueId: id,
-      event: "token_joined",
-      token: token.rows[0],
-    });
+    const io = req.app.get("io")
+    io.to(`queue_${id}`).emit("queue_updated" ,{
+      event:"token-joined",
+      token:token.rows[0]
+    })
 
     return res.status(201).json({
       success: true,
@@ -376,7 +375,8 @@ export const callNextToken = async (req, res) => {
        LIMIT 1`,
       [id]
     );
-
+    
+    
     if (nextToken.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -394,13 +394,23 @@ export const callNextToken = async (req, res) => {
        RETURNING *`,
       ["serving", tokenId]
     );
-
+    const eta = estimateQueueWait(id);
     const io = req.app.get("io");
-    io.to(`queue_${id}`).emit("queue_updated", {
-      queueId: id,
-      event: "token_called",
-      token: updated.rows[0],
+    io.to(`queue_${id}`).emit("queue_updated",{
+      event:"token-called",
+      token:updated.rows[0],
+      eta,
     });
+
+    io.to(`user_${updated.rows[0].user_id}`).emit("yourTurn",{
+      token_id:updated.rows[0].token_id,
+      token_number:updated.rows[0].token_number ,
+      queue_id:id,
+
+    })
+
+
+
 
     return res.status(200).json({
       success: true,
@@ -451,7 +461,7 @@ SET
   status = 'completed',
   served_at = NOW()
 WHERE queue_id = $1
-AND status = 'serving'
+AND status = 'called'
 RETURNING *`,[id]);
 
 if (result.rows.length === 0){
@@ -461,12 +471,12 @@ if (result.rows.length === 0){
   });
 }
 
-    const io = req.app.get("io");
-    io.to(`queue_${id}`).emit("queue_updated", {
-      queueId: id,
-      event: "token_completed",
-      token: result.rows[0],
-    });
+const io = req.app.get("io")
+io.to(`queue_${id}`).emit("queue_updated" , {
+  event:"token-completed",
+  token:result.rows[0]
+})
+
 
     return res.status(200).json({
       success:true,
@@ -479,3 +489,5 @@ if (result.rows.length === 0){
     });
   }
 }
+
+

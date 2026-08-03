@@ -11,7 +11,7 @@ export const getAvgServiceSeconds = async (serviceId) => {
      FROM tokens t
      JOIN queues q ON t.queue_id = q.queue_id
      WHERE q.service_id = $1
-       AND t.status = 'served'
+       AND t.status = 'completed'
        AND t.called_at IS NOT NULL
        AND t.served_at IS NOT NULL`,
     [serviceId]
@@ -56,7 +56,7 @@ export const estimateTokenWait = async (tokenId) => {
 
   const token = tokenResult.rows[0];
 
-  if (token.status === "served" || token.status === "no_show") {
+  if (token.status === "completed" || token.status === "no_show") {
     return { position: 0, etaMinutes: 0, status: token.status };
   }
 

@@ -2,10 +2,10 @@ import pool from "../config/db.js";
 
 export const getServices = async (req, res) => {
   try {
-    const { location_id } = req.query;
+    const { location_id , search , status="active", } = req.query;
 
     const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 8));
     const offset = (page - 1) * limit;
 
     let query = `

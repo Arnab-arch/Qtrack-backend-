@@ -9,6 +9,7 @@ import {
   joinQueue,
   callNextToken,
   getQueueStats,
+  Tokenserved,
 } from "../../controllers/queueController.js";
 
 import {
@@ -37,5 +38,6 @@ router.delete("/:id", Authmiddleware, Authroles("staff", "admin"), deleteQueue);
 
 router.post("/:id/join", Authmiddleware, joinQueue);
 router.post("/:id/next", Authmiddleware, Authroles("staff", "admin"), callNextToken);
+router.post("/:id/complete", Authmiddleware, Authroles("staff", "admin"), Tokenserved);
 
 export default router;
