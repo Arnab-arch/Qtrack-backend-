@@ -42,7 +42,9 @@ export const estimateTokenWait = async (tokenId) => {
   const tokenResult = await pool.query(
     `SELECT t.token_id, t.token_number, t.status, t.queue_id,
             t.user_lat, t.user_lon,
-            q.service_id,
+            q.service_id, q.queue_date,
+            s.service_name, s.avg_service_time,
+            l.name AS location_name,
             l.latitude AS location_lat, l.longitude AS location_lon
      FROM tokens t
      JOIN queues q ON t.queue_id = q.queue_id
@@ -56,8 +58,18 @@ export const estimateTokenWait = async (tokenId) => {
 
   const token = tokenResult.rows[0];
 
+  const baseInfo = {
+    token_id: token.token_id,
+    token_number: token.token_number,
+    status: token.status,
+    queue_id: token.queue_id,
+    queue_date: token.queue_date,
+    service_name: token.service_name,
+    location_name: token.location_name,
+  };
+
   if (token.status === "completed" || token.status === "no_show") {
-    return { position: 0, etaMinutes: 0, status: token.status };
+    return { ...baseInfo, position: 0, etaMinutes: 0 };
   }
 
   const aheadResult = await pool.query(
@@ -74,30 +86,24 @@ export const estimateTokenWait = async (tokenId) => {
   const etaMinutes = Math.round((position * avgSeconds) / 60);
 
   const result = {
+    ...baseInfo,
     position,
     etaMinutes,
     avgServiceMinutes: Math.round(avgSeconds / 60),
-    status: token.status,
   };
-
-  // Only computable if the user shared their location when joining
 
   const hasUserCoords = token.user_lat != null && token.user_lon != null;
   const hasLocationCoords = token.location_lat != null && token.location_lon != null;
 
   if (hasUserCoords && hasLocationCoords) {
     const distanceKm = haversineKm(
-      Number(token.user_lat),
-      Number(token.user_lon),
-      Number(token.location_lat),
-      Number(token.location_lon)
+      Number(token.user_lat), Number(token.user_lon),
+      Number(token.location_lat), Number(token.location_lon)
     );
     const travelEtaMinutes = Math.round((distanceKm / AVG_SPEED_KMH) * 60);
 
     result.distanceKm = Number(distanceKm.toFixed(2));
     result.travelEtaMinutes = travelEtaMinutes;
-    // How long the person can still wait before they need to leave in
-    // order to arrive right when their turn comes up.
     result.leaveInMinutes = Math.max(0, etaMinutes - travelEtaMinutes);
   }
 

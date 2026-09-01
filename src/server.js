@@ -10,12 +10,14 @@ import serviceRoutes from "./routes/api/services.js";
 import queueRoutes from "./routes/api/queues.js";
 import tokenRoutes from "./routes/api/tokens.js";
 import { Server } from "socket.io";
+import { initDb } from "./config/schema.js";
+import { Socket } from "net";
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-import { initDb } from "./config/schema.js";
-import { Socket } from "net";
+
 // server we create a server originally app.listen() creates it own server but socket.io needs a new one
 // so we made one
 const server = http.createServer(app);
@@ -43,6 +45,11 @@ io.on("connection", (socket) => {
     socket.join(`user_${userId}`);
     console.log(`Socket ${socket.id} joined room user_${userId}`);
   });
+
+  socket.on("leaveQueue", (queueId) => {
+  socket.leave(`queue_${queueId}`);
+  console.log(`Socket ${socket.id} left room queue_${queueId}`);
+});
   // send a data after a certain time
   // setTimeout(()=>{
   //   socket.send("user got a message after 2 sec")

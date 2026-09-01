@@ -461,7 +461,7 @@ SET
   status = 'completed',
   served_at = NOW()
 WHERE queue_id = $1
-AND status = 'called'
+AND status = 'serving'
 RETURNING *`,[id]);
 
 if (result.rows.length === 0){
